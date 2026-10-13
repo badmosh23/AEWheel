@@ -1,0 +1,1600 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AEwheel — a radial tool wheel for After Effects</title>
+<meta name="description" content="AEwheel opens a radial tool wheel under your cursor in After Effects. Effects, anchors, pre-comps and freeze frames in one flick. Free 7-day trial, then $15.99 once — Windows, two machines per key.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=Figtree:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: full-bleed video hero, then hairline-divided bands down one column,
+   with a numbered sticky nav that tracks the section. Bracket corners are the
+   recurring motif, lifted from the plugin panel. Motion: hero plays in on load,
+   bands rise in on scroll, numbers count, chart lines draw. */
+:root{
+  --ink:#050506;
+  --panel:#0b0c0e;
+  --panel-2:#13151a;
+  --line:rgba(255,255,255,.085);
+  --line-2:rgba(255,255,255,.17);
+  --fg:#f2f3f4;
+  --dim:#8a8d94;
+  --faint:#585c63;
+  --accent:#46d6c0;          /* UI accent — the panel's teal */
+  --accent-soft:rgba(70,214,192,.13);
+  --c-wheel:#28a391;         /* chart: AEwheel     (validated pair) */
+  --c-dive:#bf8734;          /* chart: menu diving (validated pair) */
+  --display:'Sora',-apple-system,'Segoe UI',Helvetica,sans-serif;
+  --body:'Figtree',-apple-system,'Segoe UI',Helvetica,sans-serif;
+  --mono:'JetBrains Mono',ui-monospace,'SF Mono',Consolas,monospace;
+  --ease:cubic-bezier(.22,.9,.24,1);
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+html{scroll-behavior:smooth;scroll-padding-top:88px}
+body{
+  margin:0;background:var(--ink);color:var(--fg);
+  font-family:var(--body);font-size:16px;line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+}
+img,video{max-width:100%}
+a{color:inherit}
+h1,h2,h3,h4{margin:0;font-family:var(--display);font-weight:600;text-wrap:balance;letter-spacing:-.028em}
+p{margin:0}
+
+/* ---------------- motion ---------------- */
+@keyframes rise{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:none}}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+@keyframes segIn{from{opacity:0;transform:var(--pos) scale(.4)}to{opacity:1;transform:var(--pos) scale(1)}}
+@keyframes chipIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+@keyframes nudge{0%,100%{transform:translateY(0);opacity:.45}50%{transform:translateY(6px);opacity:1}}
+.anim{animation:rise .85s var(--ease) both}
+.d1{animation-delay:.1s}.d2{animation-delay:.2s}.d3{animation-delay:.3s}
+.d4{animation-delay:.4s}.d5{animation-delay:.5s}.d6{animation-delay:.6s}.d7{animation-delay:.72s}
+
+[data-anim="on"] .rv{opacity:0;transform:translateY(28px);transition:opacity .9s var(--ease),transform .9s var(--ease)}
+[data-anim="on"] .rv.in{opacity:1;transform:none}
+[data-anim="on"] .rvs>*{opacity:0;transform:translateY(24px);transition:opacity .75s var(--ease),transform .75s var(--ease)}
+[data-anim="on"] .rvs.in>*{opacity:1;transform:none}
+[data-anim="on"] .rvs.in>*:nth-child(2){transition-delay:.07s}
+[data-anim="on"] .rvs.in>*:nth-child(3){transition-delay:.14s}
+[data-anim="on"] .rvs.in>*:nth-child(4){transition-delay:.21s}
+[data-anim="on"] .rvs.in>*:nth-child(5){transition-delay:.28s}
+[data-anim="on"] .rvs.in>*:nth-child(6){transition-delay:.35s}
+[data-anim="on"] .rvs.in>*:nth-child(7){transition-delay:.42s}
+[data-anim="on"] .rvs.in>*:nth-child(8){transition-delay:.49s}
+
+/* ---------------- primitives ---------------- */
+.wrap{max-width:1200px;margin:0 auto;padding-inline:22px}
+.eyebrow{
+  font-family:var(--mono);font-size:11px;font-weight:500;
+  letter-spacing:.17em;text-transform:uppercase;color:var(--faint);
+}
+.band{border-top:1px solid var(--line)}
+.band-in{padding-block:clamp(64px,8.5vw,124px)}
+.brk{position:relative}
+.brk::before,.brk::after{
+  content:"";position:absolute;width:14px;height:14px;pointer-events:none;
+  border:1.5px solid var(--line-2);
+}
+.brk::before{top:-1px;left:-1px;border-right:0;border-bottom:0}
+.brk::after{bottom:-1px;right:-1px;border-left:0;border-top:0}
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:10px;
+  min-height:54px;padding:0 28px;border:1px solid var(--line-2);
+  background:transparent;color:var(--fg);
+  font-family:var(--display);font-size:15px;font-weight:500;
+  text-decoration:none;cursor:pointer;
+  transition:background .24s var(--ease),border-color .24s var(--ease),color .24s var(--ease),transform .24s var(--ease);
+}
+.btn:hover{border-color:var(--accent);color:var(--accent);transform:translateY(-2px)}
+.btn-fill{background:var(--fg);border-color:var(--fg);color:var(--ink);font-weight:600}
+.btn-fill:hover{background:var(--accent);border-color:var(--accent);color:#042019}
+:where(a,button,summary,input):focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.sec-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:14px 28px;margin-bottom:44px}
+.sec-head .eyebrow{flex-basis:100%}
+.sec-head h2{font-size:clamp(26px,3.6vw,40px);font-weight:500;flex:1 1 340px;min-width:0;line-height:1.14}
+.sec-head .lede{color:var(--dim);font-size:15.5px;max-width:40ch;margin-left:auto}
+
+/* ---------------- nav ---------------- */
+.nav{
+  position:sticky;top:env(safe-area-inset-top,0px);z-index:60;
+  background:rgba(5,5,6,.55);backdrop-filter:blur(18px);
+  border-bottom:1px solid transparent;
+  transition:background .34s var(--ease),border-color .34s var(--ease);
+}
+.nav.stuck{background:rgba(5,5,6,.94);border-bottom-color:var(--line)}
+.nav-in{display:flex;align-items:center;gap:26px;height:68px}
+.mark{display:flex;align-items:center;gap:11px;text-decoration:none;flex-shrink:0}
+.mark svg{transition:transform .55s var(--ease)}
+.mark:hover svg{transform:rotate(45deg)}
+.mark-txt{font-family:var(--display);font-size:19px;letter-spacing:-.03em;line-height:1}
+.mark-txt b{font-weight:700}.mark-txt span{font-weight:300}
+.nav-links{display:flex;gap:2px;margin-left:auto;list-style:none;padding:0;margin-block:0}
+.nav-links a{
+  position:relative;display:block;padding:8px 11px;
+  font-family:var(--mono);font-size:11px;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--faint);text-decoration:none;transition:color .26s var(--ease);
+}
+.nav-links a::after{
+  content:"";position:absolute;left:11px;right:11px;bottom:3px;height:1px;background:var(--accent);
+  transform:scaleX(0);transform-origin:left;transition:transform .34s var(--ease);
+}
+.nav-links a:hover,.nav-links a.on{color:var(--fg)}
+.nav-links a.on::after{transform:scaleX(1)}
+.nav-cta{
+  font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--accent);text-decoration:none;border:1px solid var(--line-2);
+  padding:11px 16px;flex-shrink:0;transition:border-color .24s,background .24s;
+}
+.nav-cta:hover{border-color:var(--accent);background:var(--accent-soft)}
+@media(max-width:1000px){.nav-links{display:none}.nav-cta{margin-left:auto}}
+
+/* fixed numbered rail — only where the margin genuinely fits beside the 1200px column */
+.rail{display:none}
+@media(min-width:1460px){
+  .nav-links{display:none}
+  .rail{
+    display:block;position:fixed;left:30px;top:50%;transform:translateY(-50%);z-index:55;
+    list-style:none;margin:0;padding:0;
+  }
+  .rail a{
+    display:flex;align-items:center;gap:9px;padding:7px 0;text-decoration:none;
+    font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;
+    color:var(--faint);transition:color .26s var(--ease);
+  }
+  .rail a i{
+    width:6px;height:6px;flex-shrink:0;background:transparent;
+    border:1px solid var(--line-2);transition:background .26s var(--ease),border-color .26s var(--ease);
+  }
+  .rail a:hover{color:var(--dim)}
+  .rail a.on{color:var(--fg)}
+  .rail a.on i{background:var(--accent);border-color:var(--accent)}
+}
+
+/* typed-headline cursor, lifted from the reference site */
+.cursor::after{
+  content:"";display:inline-block;width:.46em;height:.82em;margin-left:.1em;
+  background:var(--accent);vertical-align:-.04em;animation:blink 1.15s steps(1) infinite;
+}
+@keyframes blink{0%,49%{opacity:1}50%,100%{opacity:0}}
+
+/* ---------------- background film ---------------- */
+.bg-layer{
+  position:fixed;inset:0;z-index:0;pointer-events:none;
+  will-change:transform;contain:strict;
+}
+.bg-layer video{
+  width:100%;height:100%;object-fit:cover;display:block;
+  animation:fade 1.6s var(--ease) both;
+}
+.bg-veil{
+  position:absolute;inset:0;
+  background:
+    linear-gradient(100deg,rgba(5,5,6,.95) 0%,rgba(5,5,6,.87) 40%,rgba(5,5,6,.68) 72%,rgba(5,5,6,.84) 100%),
+    radial-gradient(130% 85% at 8% 36%,transparent 26%,rgba(5,5,6,.78) 100%);
+}
+/* past the hero the film has to sit back so body copy stays readable */
+.bg-dim{position:absolute;inset:0;background:var(--ink);opacity:0}
+.bg-grain{
+  position:absolute;inset:0;opacity:.55;
+  background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);
+  background-size:54px 54px;
+  mask:linear-gradient(90deg,#000 0%,transparent 55%);
+  -webkit-mask:linear-gradient(90deg,#000 0%,transparent 55%);
+}
+/* everything readable sits above the film */
+.nav,main,.foot{position:relative;z-index:1}
+/* once the film is gone these bands need their own ground */
+.band-solid{background:var(--ink)}
+
+/* ---------------- hero ---------------- */
+.hero{position:relative;overflow:hidden;border-bottom:1px solid var(--line)}
+.hero-in{position:relative;z-index:3;padding-block:clamp(72px,11vw,146px)}
+.hero-col{max-width:660px}
+.pill{
+  display:inline-flex;align-items:center;gap:9px;margin-bottom:30px;
+  border:1px solid var(--line-2);padding:8px 14px;
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--dim);
+  background:rgba(5,5,6,.5);
+}
+.pill i{width:6px;height:6px;background:var(--accent);flex-shrink:0}
+.lockup{display:flex;align-items:center;gap:18px;margin-bottom:26px}
+.lockup-txt{font-family:var(--display);font-size:clamp(30px,4.6vw,44px);line-height:1;letter-spacing:-.04em}
+.lockup-txt b{font-weight:700}.lockup-txt span{font-weight:300}
+.hero h1{
+  font-size:clamp(36px,6.4vw,70px);line-height:1.02;font-weight:600;
+  letter-spacing:-.04em;margin-bottom:24px;
+}
+.hero h1 em{font-style:normal;color:var(--accent)}
+.hero-sub{color:var(--dim);font-size:clamp(16px,1.5vw,18.5px);max-width:50ch;margin-bottom:36px}
+.cta-row{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:26px}
+.hero-meta{
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--faint);display:flex;flex-wrap:wrap;gap:7px 14px;
+}
+.scroll-cue{
+  position:relative;z-index:3;display:flex;align-items:center;gap:10px;
+  padding-bottom:26px;
+  font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);
+}
+.scroll-cue svg{animation:nudge 2.4s ease-in-out infinite}
+
+/* ---------------- statement ---------------- */
+.stmt{display:grid;grid-template-columns:1fr 1fr;gap:0;border:1px solid var(--line)}
+@media(max-width:800px){.stmt{grid-template-columns:1fr}}
+.stmt>div{padding:clamp(28px,3.6vw,46px)}
+.stmt>div+div{border-left:1px solid var(--line)}
+@media(max-width:800px){.stmt>div+div{border-left:0;border-top:1px solid var(--line)}}
+.stmt h3{font-size:clamp(21px,2.5vw,29px);font-weight:400;line-height:1.2;margin-bottom:16px}
+.stmt .hi{color:var(--accent)}
+.stmt p{color:var(--dim);font-size:14.5px;max-width:40ch}
+
+/* ---------------- stat row ---------------- */
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border:1px solid var(--line)}
+@media(max-width:900px){.stats{grid-template-columns:1fr 1fr}}
+@media(max-width:480px){.stats{grid-template-columns:1fr}}
+.stat{padding:30px 26px 32px;border-right:1px solid var(--line)}
+.stat:last-child{border-right:0}
+@media(max-width:900px){
+  .stat{border-bottom:1px solid var(--line)}
+  .stat:nth-child(2n){border-right:0}
+  .stat:nth-last-child(-n+2){border-bottom:0}
+}
+@media(max-width:480px){
+  .stat{border-right:0}
+  .stat:nth-last-child(-n+2){border-bottom:1px solid var(--line)}
+  .stat:last-child{border-bottom:0}
+}
+.stat b{
+  display:block;font-family:var(--display);font-size:clamp(38px,4.6vw,54px);font-weight:600;
+  letter-spacing:-.045em;line-height:1;font-variant-numeric:tabular-nums;margin-bottom:4px;
+}
+.stat b small{font-size:.44em;font-weight:500;letter-spacing:-.01em;color:var(--dim)}
+.stat .k{font-family:var(--mono);font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--accent);margin-bottom:12px;display:block}
+.stat p{color:var(--dim);font-size:13.5px}
+
+/* ---------------- the maths: two bars, one headline ---------------- */
+.calc{border:1px solid var(--line);background:var(--panel)}
+.calc-head{
+  display:grid;grid-template-columns:minmax(0,1fr) minmax(0,auto);gap:clamp(20px,3vw,48px);
+  padding:clamp(26px,3.4vw,42px);border-bottom:1px solid var(--line);align-items:center;
+}
+@media(max-width:820px){.calc-head{grid-template-columns:1fr;gap:26px}}
+.calc-head h3{font-size:clamp(19px,2.2vw,25px);font-weight:500;margin-bottom:10px}
+.calc-head p{color:var(--dim);font-size:14.5px;max-width:46ch}
+.hero-num{text-align:right;flex-shrink:0}
+@media(max-width:820px){.hero-num{text-align:left}}
+.hero-num .k{
+  font-family:var(--mono);font-size:10px;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--faint);display:block;margin-bottom:10px;
+}
+.hero-num b{
+  display:block;font-family:var(--display);font-size:clamp(54px,7.6vw,88px);font-weight:600;
+  letter-spacing:-.05em;line-height:.9;color:var(--accent);font-variant-numeric:tabular-nums;
+}
+.hero-num b small{font-size:.28em;font-weight:500;letter-spacing:0}
+.hero-num .sub{font-size:13.5px;color:var(--dim);margin-top:12px}
+
+.bars{padding:clamp(26px,3.4vw,42px)}
+.bar-row+.bar-row{margin-top:clamp(22px,2.6vw,30px)}
+.bar-top{display:flex;align-items:baseline;justify-content:space-between;gap:16px;margin-bottom:11px}
+.bar-name{display:flex;align-items:center;gap:10px;font-size:14.5px;color:var(--dim);min-width:0}
+.bar-name i{width:10px;height:10px;flex-shrink:0;display:block}
+.bar-val{
+  font-family:var(--display);font-size:clamp(21px,2.6vw,29px);font-weight:600;
+  letter-spacing:-.04em;line-height:1;font-variant-numeric:tabular-nums;white-space:nowrap;
+}
+.bar-val small{font-size:.5em;font-weight:500;color:var(--dim);letter-spacing:0}
+.track{height:16px;background:rgba(255,255,255,.04);border:1px solid var(--line)}
+.fill{height:100%;width:0;border-radius:0 4px 4px 0;transition:width 1.15s var(--ease)}
+.bar-note{margin-top:9px;font-size:13px;color:var(--faint);max-width:52ch}
+.calc-foot{
+  border-top:1px solid var(--line);padding:20px clamp(26px,3.4vw,42px);
+  display:flex;flex-wrap:wrap;gap:8px 26px;align-items:baseline;
+}
+.calc-foot .big{font-size:15px;color:var(--fg)}
+.calc-foot .big b{color:var(--accent);font-weight:600}
+.foot-src{
+  font-size:12px;color:#4a4d54;line-height:1.6;margin-top:18px;max-width:84ch;
+}
+
+/* ---------------- wheel panel ---------------- */
+.panel-demo{background:var(--panel);border:1px solid var(--line)}
+.pd-bar{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;height:34px;
+  padding:0 13px;background:var(--panel-2);border-bottom:1px solid var(--line);
+}
+.dots{display:flex;gap:6px}
+.dots i{width:7px;height:7px;border-radius:50%;background:#32353b;display:block}
+.dots i:first-child{background:var(--accent)}
+.pd-bar .eyebrow{font-size:10px}
+.stage{
+  position:relative;display:grid;place-items:center;overflow:hidden;padding:10px;
+  background:radial-gradient(circle at 50% 50%,#181b20 0%,#0a0b0d 66%);
+}
+.stage::before{
+  content:"";position:absolute;inset:0;opacity:.5;
+  background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);
+  background-size:44px 44px;
+  mask:radial-gradient(circle at 50% 50%,#000 0%,transparent 72%);
+  -webkit-mask:radial-gradient(circle at 50% 50%,#000 0%,transparent 72%);
+}
+#wheelSvg{position:relative;display:block;width:100%;height:auto;max-width:460px;overflow:visible}
+
+/* a sector: rounded annular wedge, icon over label, like the panel */
+.sx{cursor:pointer}
+.sx .pl{
+  fill:#15181c;stroke:rgba(255,255,255,.085);stroke-width:1;
+  transition:fill .18s var(--ease),stroke .18s var(--ease);
+}
+.sx .ic{fill:none;stroke:#9aa0a7;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;transition:stroke .18s var(--ease)}
+.sx .lb{
+  fill:#b9bec4;font-family:var(--body);font-size:12px;font-weight:500;
+  text-anchor:middle;transition:fill .18s var(--ease);
+}
+.sx:hover .pl{fill:#1b1f24;stroke:var(--line-2)}
+.sx:hover .ic{stroke:#dfe3e7}
+.sx:hover .lb{fill:#e6e9ec}
+.sx.on .pl{fill:rgba(70,214,192,.1);stroke:var(--accent);stroke-width:1.4}
+.sx.on .ic{stroke:var(--accent)}
+.sx.on .lb{fill:#eafffb}
+.sx.on{filter:drop-shadow(0 0 7px rgba(70,214,192,.45))}
+
+/* outer ring: the armed sector's tools */
+.tx .pl{
+  fill:#15181c;stroke:rgba(70,214,192,.5);stroke-width:1;
+  transition:fill .16s var(--ease),stroke .16s var(--ease);
+}
+.tx .lb{fill:#c4c9cf;font-family:var(--body);font-size:11px;text-anchor:middle;transition:fill .16s var(--ease)}
+.tx:hover .pl,.tx.hot .pl{fill:rgba(70,214,192,.16);stroke:var(--accent);stroke-width:1.5}
+.tx:hover .lb,.tx.hot .lb{fill:#eafffb}
+.tx:hover,.tx.hot{filter:drop-shadow(0 0 7px rgba(70,214,192,.5))}
+.tx{cursor:default;animation:segPop .26s var(--ease) both}
+/* the anchor sector is a 3x3 grid, not a tool list */
+.ag rect{fill:#15181c;stroke:rgba(70,214,192,.45);stroke-width:1;transition:fill .16s var(--ease)}
+.ag rect:hover,.ag rect.hot{fill:rgba(70,214,192,.3);stroke:var(--accent)}
+
+.hub-c{fill:#0a0b0d;stroke:var(--accent);stroke-width:1.2}
+.hub-x{fill:none;stroke:#cfd4d9;stroke-width:1.5;stroke-linecap:round}
+.hub-t{fill:var(--accent);font-family:var(--mono);font-size:8.5px;letter-spacing:.14em;text-anchor:middle}
+
+/* staged entrance, matching the panel's quick pop */
+#wheelSvg .sx,#wheelSvg .tx{transform-box:view-box;transform-origin:230px 230px}
+.wheel-anim .sx{animation:segPop .34s var(--ease) both}
+@keyframes segPop{from{opacity:0;transform:scale(.46)}to{opacity:1;transform:scale(1)}}
+
+.readout{
+  display:flex;flex-wrap:wrap;gap:9px 14px;align-items:baseline;
+  padding:14px 16px;border-top:1px solid var(--line);min-height:62px;
+}
+.readout b{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent)}
+.readout span{font-size:13px;color:var(--dim)}
+.pd-cap{padding:0 16px 15px;font-size:12.5px;color:var(--faint)}
+
+/* demo beside its explainer column */
+.demo-grid{display:grid;gap:clamp(24px,3.6vw,52px);align-items:start}
+#wheelGrid{grid-template-columns:minmax(0,490px) minmax(0,1fr)}
+#panelGrid{grid-template-columns:minmax(0,400px) minmax(0,1fr)}
+/* on a phone the demo carries the section alone — the explainer column
+   only makes an already long page longer */
+@media(max-width:760px){
+  #wheelGrid,#panelGrid{grid-template-columns:1fr}
+  #wheelGrid .tools,#panelGrid .pn-notes{display:none}
+}
+
+/* ---------------- sector grid ---------------- */
+.tools{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border:1px solid var(--line)}
+@media(max-width:1000px){.tools{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:540px){.tools{grid-template-columns:1fr}}
+.tool{padding:26px 24px 28px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);transition:background .34s var(--ease)}
+.tool:hover{background:rgba(255,255,255,.02)}
+.tool .eyebrow{display:block;margin-bottom:14px}
+.tool h3{font-size:17.5px;font-weight:500;margin-bottom:8px}
+.tool p{color:var(--dim);font-size:13.5px}
+.tools>:nth-child(4n){border-right:0}
+.tools>:nth-last-child(-n+4){border-bottom:0}
+@media(max-width:1000px){
+  .tools>*{border-right:1px solid var(--line)}
+  .tools>:nth-child(2n){border-right:0}
+  .tools>:nth-last-child(-n+4){border-bottom:1px solid var(--line)}
+  .tools>:nth-last-child(-n+2){border-bottom:0}
+}
+@media(max-width:540px){
+  .tools>*{border-right:0;border-bottom:1px solid var(--line)}
+  .tools>:last-child{border-bottom:0}
+}
+
+/* ---------------- steps ---------------- */
+.steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0;border:1px solid var(--line)}
+@media(max-width:820px){.steps{grid-template-columns:1fr}}
+.step{padding:clamp(26px,3.2vw,38px);border-right:1px solid var(--line)}
+.step:last-child{border-right:0}
+@media(max-width:820px){
+  .step{border-right:0;border-bottom:1px solid var(--line)}
+  .step:last-child{border-bottom:0}
+}
+.step .n{
+  font-family:var(--display);font-size:46px;font-weight:600;letter-spacing:-.05em;
+  color:var(--line-2);line-height:1;display:block;margin-bottom:18px;
+}
+.step h3{font-size:19px;font-weight:500;margin-bottom:10px}
+.step p{color:var(--dim);font-size:14.5px}
+.step code{font-family:var(--mono);font-size:13px;color:var(--accent)}
+
+/* ---------------- pricing ---------------- */
+.plans{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start}
+@media(max-width:780px){.plans{grid-template-columns:1fr}}
+.plan{
+  background:var(--panel);border:1px solid var(--line);padding:clamp(28px,3.4vw,40px);
+  display:flex;flex-direction:column;gap:22px;transition:border-color .42s var(--ease);
+}
+.plan:hover{border-color:var(--line-2)}
+.plan.lead{border-color:var(--line-2);background:linear-gradient(180deg,rgba(70,214,192,.055),transparent 46%)}
+.plan-top{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
+.plan h3{font-size:21px;font-weight:500}
+.tag{
+  font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);
+  border:1px solid rgba(70,214,192,.4);padding:5px 9px;white-space:nowrap;
+}
+.price{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.price b{font-family:var(--display);font-size:clamp(36px,4.6vw,48px);font-weight:600;letter-spacing:-.045em;line-height:1;font-variant-numeric:tabular-nums}
+.price span{font-family:var(--mono);font-size:11px;letter-spacing:.11em;text-transform:uppercase;color:var(--faint)}
+.plan ul{list-style:none;padding:0;margin:0;display:grid;gap:12px}
+.plan li{position:relative;padding-left:21px;font-size:14.5px;color:var(--dim)}
+.plan li::before{content:"";position:absolute;left:0;top:7px;width:7px;height:7px;background:var(--line-2)}
+.plan.lead li::before{background:var(--accent)}
+.plan li b{color:var(--fg);font-weight:600}
+.plan .btn{width:100%}
+.fine{font-size:12.5px;color:var(--faint);line-height:1.58}
+.fine code{font-family:var(--mono);font-size:12px}
+/* the 2-device allowance, called out rather than buried in the list */
+.devices{
+  border:1px solid rgba(70,214,192,.34);background:var(--accent-soft);
+  padding:15px 17px;display:flex;align-items:center;gap:14px;
+}
+.devices .n{
+  font-family:var(--display);font-size:33px;font-weight:600;letter-spacing:-.045em;
+  line-height:1;color:var(--accent);flex-shrink:0;font-variant-numeric:tabular-nums;
+}
+.devices .t{font-size:13.5px;color:var(--dim);line-height:1.5}
+.devices .t b{display:block;color:var(--fg);font-weight:600;font-size:14px;margin-bottom:1px}
+.trust{
+  display:flex;flex-wrap:wrap;gap:7px 20px;margin-top:4px;
+  font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);
+}
+.trust span{display:flex;align-items:center;gap:7px}
+.trust span::before{content:"";width:5px;height:5px;background:var(--accent);flex-shrink:0}
+
+/* ---------------- settings panel mock ---------------- */
+.settings{background:#07080a;border:1px solid var(--line);font-size:14px;position:relative}
+.st-bar{
+  display:flex;align-items:center;gap:11px;height:40px;padding:0 14px;
+  background:var(--panel-2);border-bottom:1px solid var(--line);
+}
+.st-bar b{font-weight:500;font-size:13.5px;color:var(--fg)}
+.st-bar i{margin-left:auto;color:var(--faint);font-style:normal;font-size:15px;line-height:1}
+.st-body{padding:4px 0 10px}
+.st-sec{
+  display:flex;align-items:center;gap:10px;padding:16px 16px 13px;
+  border-bottom:1px solid var(--line);
+}
+.st-sec h4{font-family:var(--display);font-size:20px;font-weight:500;letter-spacing:-.025em;margin:0;color:var(--fg)}
+.st-sec .ct{font-family:var(--mono);font-size:11px;color:var(--faint)}
+.st-sec .ar{margin-left:auto;color:var(--accent);font-size:13px;letter-spacing:-1px}
+.st-search{
+  width:calc(100% - 32px);margin:12px 16px 6px;background:#0d0f12;color:var(--fg);
+  border:1px solid var(--line);padding:9px 11px;font-family:var(--body);font-size:12.5px;
+}
+.st-search::placeholder{color:#4e5259}
+.st-search:focus{outline:none;border-color:var(--accent)}
+
+.st-row{
+  display:flex;align-items:center;gap:11px;padding:11px 16px;cursor:pointer;
+  border-bottom:1px solid rgba(255,255,255,.045);transition:background .18s var(--ease);
+}
+.st-row:hover{background:rgba(255,255,255,.025)}
+.st-row .gr{color:#42464d;font-size:12px;letter-spacing:-2px;line-height:1;flex-shrink:0;cursor:grab}
+.st-row .dot{width:7px;height:7px;border-radius:50%;background:var(--accent);flex-shrink:0}
+.st-row .nm{font-size:15px;color:var(--fg);flex:1;min-width:0}
+.st-row .ct{font-family:var(--mono);font-size:11.5px;color:var(--faint)}
+.st-row .chev{color:var(--faint);font-size:12px;transition:transform .24s var(--ease)}
+.st-row.open .chev{transform:rotate(90deg);color:var(--accent)}
+.st-row .lk{font-family:var(--mono);font-size:10px;letter-spacing:.12em;color:var(--faint)}
+
+.st-panel{padding:4px 16px 16px;border-bottom:1px solid rgba(255,255,255,.045);animation:rise .3s var(--ease) both}
+.st-name{display:flex;gap:10px;margin-bottom:11px}
+.st-name input{
+  flex:1;min-width:0;background:#0d0f12;border:1px solid var(--line-2);color:var(--fg);
+  padding:10px 12px;font-family:var(--mono);font-size:12.5px;
+}
+.st-name input:focus{outline:none;border-color:var(--accent)}
+.st-sw{width:44px;flex-shrink:0;border:1px solid var(--line-2);background:var(--accent);cursor:pointer}
+.st-tool{
+  display:flex;align-items:center;gap:11px;background:#0d0f12;border:1px solid var(--line);
+  padding:9px 12px;margin-bottom:7px;animation:chipIn .26s var(--ease) both;
+}
+.st-tool .nm{flex:1;min-width:0;font-size:13.5px;color:#c9ced3}
+.st-tool button{
+  background:none;border:0;color:#4e5259;cursor:pointer;font-size:14px;line-height:1;padding:2px 4px;
+}
+.st-tool button:hover{color:#e07b6a}
+.st-add{
+  position:relative;background:rgba(70,214,192,.07);border:1px dashed rgba(70,214,192,.4);
+  color:var(--accent);font-family:var(--mono);font-size:12px;padding:11px 16px;cursor:pointer;
+  width:auto;transition:background .2s var(--ease);
+}
+.st-add:hover{background:rgba(70,214,192,.14)}
+.st-pref{display:flex;align-items:center;gap:14px;padding:13px 16px;border-bottom:1px solid rgba(255,255,255,.045)}
+.st-pref .nm{flex:1;min-width:0;font-size:14.5px;color:var(--fg)}
+.seg-ctl{display:flex;border:1px solid var(--line-2)}
+.seg-ctl button{
+  background:none;border:0;color:var(--dim);font-family:var(--mono);font-size:10.5px;letter-spacing:.09em;
+  padding:7px 11px;cursor:pointer;transition:background .18s,color .18s;
+}
+.seg-ctl button+button{border-left:1px solid var(--line-2)}
+.seg-ctl button.on{background:var(--fg);color:var(--ink);font-weight:600}
+.st-pref select{
+  background:#0d0f12;border:1px solid var(--line-2);color:var(--fg);
+  font-family:var(--mono);font-size:11.5px;padding:8px 10px;
+}
+/* the add-tool dialog */
+.st-modal{
+  position:absolute;inset:0;z-index:5;display:none;
+  background:rgba(4,5,6,.86);backdrop-filter:blur(3px);padding:22px;
+}
+.st-modal.on{display:grid;place-items:center;animation:fade .2s var(--ease) both}
+.st-modal-in{
+  width:100%;max-width:330px;background:var(--panel);border:1px solid var(--line-2);
+  max-height:100%;display:flex;flex-direction:column;
+}
+.st-modal-hd{display:flex;align-items:center;gap:10px;padding:13px 14px;border-bottom:1px solid var(--line)}
+.st-modal-hd b{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent)}
+.st-modal-hd button{margin-left:auto;background:none;border:0;color:var(--faint);cursor:pointer;font-size:15px;line-height:1}
+.st-modal-hd button:hover{color:var(--fg)}
+.st-modal-list{overflow:auto;padding:8px;display:grid;gap:6px}
+.st-opt{
+  display:flex;align-items:center;gap:10px;background:#0d0f12;border:1px solid var(--line);
+  padding:9px 11px;cursor:pointer;font-size:13px;color:#c9ced3;text-align:left;
+}
+.st-opt:hover{border-color:var(--accent);color:var(--fg)}
+.st-opt span{margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--faint)}
+.st-empty{padding:16px;font-size:12.5px;color:var(--faint)}
+
+.pn-notes{display:grid;gap:0;border:1px solid var(--line);align-content:start}
+.pn-note{padding:22px 24px;border-bottom:1px solid var(--line)}
+.pn-note:last-child{border-bottom:0}
+.pn-note .eyebrow{display:block;margin-bottom:11px}
+.pn-note h3{font-size:16.5px;font-weight:500;margin-bottom:7px}
+.pn-note p{color:var(--dim);font-size:13.5px}
+
+/* ---------------- pull quote ---------------- */
+.quote{border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.quote-in{padding-block:clamp(48px,6.5vw,88px);max-width:21ch}
+.quote p{
+  font-family:var(--display);font-size:clamp(25px,3.9vw,46px);font-weight:500;
+  letter-spacing:-.035em;line-height:1.12;
+}
+.quote .src{
+  display:block;margin-top:22px;font-family:var(--mono);font-size:10.5px;
+  letter-spacing:.13em;text-transform:uppercase;color:var(--faint);
+}
+
+/* ---------------- faq ---------------- */
+.faq{border-top:1px solid var(--line)}
+.faq details{border-bottom:1px solid var(--line)}
+.faq summary{
+  display:flex;align-items:center;gap:18px;padding:24px 2px;cursor:pointer;list-style:none;
+  font-family:var(--display);font-size:17.5px;font-weight:500;letter-spacing:-.02em;
+  transition:color .22s var(--ease);
+}
+.faq summary:hover{color:var(--accent)}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary::after{
+  content:"+";margin-left:auto;font-family:var(--mono);font-size:20px;color:var(--faint);
+  font-weight:400;line-height:1;transition:transform .36s var(--ease),color .24s;
+}
+.faq details[open] summary::after{transform:rotate(45deg);color:var(--accent)}
+.faq summary .num{font-family:var(--mono);font-size:11px;letter-spacing:.12em;color:var(--faint);flex-shrink:0}
+.faq .ans{padding:0 2px 26px 44px;color:var(--dim);font-size:15px;max-width:70ch;animation:rise .46s var(--ease) both}
+.faq .ans code{font-family:var(--mono);font-size:13px}
+@media(max-width:560px){.faq .ans{padding-left:2px}}
+
+/* ---------------- closing band ---------------- */
+.close-band{position:relative;overflow:hidden;border-top:1px solid var(--line)}
+.close-band .cb-in{position:relative;z-index:2;padding-block:clamp(60px,8vw,104px);text-align:center}
+.close-band h2{font-size:clamp(32px,5.4vw,58px);font-weight:600;letter-spacing:-.04em;line-height:1.04;margin-bottom:20px}
+.close-band p{color:var(--dim);font-size:16.5px;max-width:48ch;margin:0 auto 32px}
+.close-band .cta-row{justify-content:center;margin-bottom:0}
+.cb-glow{
+  position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:1;
+  width:min(760px,96vw);aspect-ratio:1;border-radius:50%;pointer-events:none;
+  background:radial-gradient(circle,rgba(70,214,192,.1) 0%,transparent 62%);
+}
+
+/* ---------------- footer ---------------- */
+.foot{border-top:1px solid var(--line);background:var(--panel)}
+.foot-in{padding-block:clamp(42px,5vw,66px);display:grid;grid-template-columns:minmax(0,1.4fr) repeat(2,minmax(0,1fr));gap:38px}
+@media(max-width:780px){.foot-in{grid-template-columns:1fr 1fr}}
+@media(max-width:520px){.foot-in{grid-template-columns:1fr}}
+.foot h4{font-family:var(--mono);font-size:10.5px;font-weight:500;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin:0 0 17px}
+.foot ul{list-style:none;padding:0;margin:0;display:grid;gap:11px}
+.foot a{font-size:14px;color:var(--dim);text-decoration:none;transition:color .22s}
+.foot a:hover{color:var(--fg)}
+.mail{font-family:var(--mono);font-size:13.5px;color:var(--accent);border:1px solid var(--line);padding:11px 14px;display:inline-block;user-select:all}
+.foot-note{
+  border-top:1px solid var(--line);padding-block:24px;display:flex;flex-wrap:wrap;gap:10px 24px;
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:#4a4d54;
+}
+
+@media(prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *{animation:none!important;transition:none!important}
+  [data-anim="on"] .rv,[data-anim="on"] .rvs>*{opacity:1!important;transform:none!important}
+}
+</style>
+
+<!-- ======================= NAV ======================= -->
+<header class="nav" id="nav">
+  <div class="wrap nav-in">
+    <a class="mark" href="#top" aria-label="AEwheel, home">
+      <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true">
+        <g fill="none" stroke="#f2f3f4" stroke-width="1.6">
+          <path d="M1 6V1h5M16 1h5v5M21 16v5h-5M6 21H1v-5"/><path d="M7.5 7.5l7 7M14.5 7.5l-7 7"/>
+        </g>
+      </svg>
+      <span class="mark-txt"><b>AE</b><span>wheel</span></span>
+    </a>
+    <ul class="nav-links">
+      <li><a href="#cost" data-sec="cost">01_ The cost</a></li>
+      <li><a href="#maths" data-sec="maths">02_ The maths</a></li>
+      <li><a href="#wheel" data-sec="wheel">03_ The wheel</a></li>
+      <li><a href="#install" data-sec="install">04_ Install</a></li>
+      <li><a href="#pricing" data-sec="pricing">05_ Pricing</a></li>
+      <li><a href="#panel" data-sec="panel">06_ The panel</a></li>
+      <li><a href="#faq" data-sec="faq">07_ FAQ</a></li>
+    </ul>
+    <a class="nav-cta" href="#pricing">Get AEwheel</a>
+  </div>
+</header>
+
+<ul class="rail" aria-label="Section navigation">
+  <li><a href="#cost" data-sec="cost"><i aria-hidden="true"></i>01_ The cost</a></li>
+  <li><a href="#maths" data-sec="maths"><i aria-hidden="true"></i>02_ The maths</a></li>
+  <li><a href="#wheel" data-sec="wheel"><i aria-hidden="true"></i>03_ The wheel</a></li>
+  <li><a href="#install" data-sec="install"><i aria-hidden="true"></i>04_ Install</a></li>
+  <li><a href="#pricing" data-sec="pricing"><i aria-hidden="true"></i>05_ Pricing</a></li>
+  <li><a href="#panel" data-sec="panel"><i aria-hidden="true"></i>06_ The panel</a></li>
+  <li><a href="#faq" data-sec="faq"><i aria-hidden="true"></i>07_ FAQ</a></li>
+</ul>
+
+<!-- Background film: fixed so the page floats over it, then released once
+     the maths section has passed (see bgLayer in the script). -->
+<div class="bg-layer" id="bgLayer" aria-hidden="true">
+  <video id="heroVid" autoplay muted loop playsinline preload="metadata" poster="poster.jpg">
+    <source src="hero.mp4" type="video/mp4">
+  </video>
+  <div class="bg-veil"></div>
+  <div class="bg-grain"></div>
+  <div class="bg-dim" id="bgDim"></div>
+</div>
+
+<main id="top">
+<!-- ======================= HERO ======================= -->
+<section class="hero">
+  <div class="wrap hero-in">
+    <div class="hero-col">
+      <span class="pill anim d1"><i></i> 7-day free trial · no card, no sign-up</span>
+      <div class="lockup anim d2">
+        <svg width="40" height="40" viewBox="0 0 22 22" aria-hidden="true" style="flex-shrink:0">
+          <g fill="none" stroke="#d8dadd" stroke-width="1.4">
+            <path d="M1 6V1h5M16 1h5v5M21 16v5h-5M6 21H1v-5"/><path d="M7.5 7.5l7 7M14.5 7.5l-7 7"/>
+          </g>
+        </svg>
+        <span class="lockup-txt"><b>AE</b><span>wheel</span></span>
+      </div>
+      <h1 class="anim d3 cursor">Stop renting your<br>time to menus.</h1>
+      <p class="hero-sub anim d4">A radial tool wheel that opens under your cursor in After Effects. Effects, anchors, pre-comps, nulls, freeze frames — one flick each, instead of four clicks down a submenu you already know by heart.</p>
+      <div class="cta-row anim d5">
+        <a class="btn btn-fill" href="https://github.com/YOUR-USERNAME/aewheel/releases/latest/download/AEwheel-Setup.zip">Download free trial</a>
+        <a class="btn" href="#maths">See what it saves you</a>
+      </div>
+      <p class="hero-meta anim d6">
+        <span>Windows</span><span>·</span><span>After Effects CC 2021+</span><span>·</span>
+        <span>One-time payment</span><span>·</span><span>2 machines per key</span>
+      </p>
+    </div>
+  </div>
+  <div class="wrap scroll-cue anim d7">
+    <svg width="11" height="18" viewBox="0 0 11 18" fill="none" aria-hidden="true">
+      <path d="M5.5 0v16M1 11.5l4.5 4.5L10 11.5" stroke="#585c63" stroke-width="1.3"/>
+    </svg>
+    Scroll
+  </div>
+</section>
+
+<!-- ======================= 01 THE COST ======================= -->
+<section class="band" id="cost">
+  <div class="wrap band-in">
+    <div class="stmt rv">
+      <div>
+        <h3>Every menu dive is time you rent back from the work.</h3>
+        <p>Four clicks to apply a Drop Shadow. Three to pre-compose. Two more to undo the anchor you nudged by eye. None of it is the job — it's the route to the job, and you pay the toll every single time.</p>
+      </div>
+      <div>
+        <h3 class="hi">Every flick is time you keep.</h3>
+        <p>The wheel opens where your cursor already is. You throw it toward a sector, release, and you're back in the comp. Same action, same result, none of the travel.</p>
+      </div>
+    </div>
+
+    <div class="sec-head rv" style="margin-top:clamp(52px,6vw,88px);margin-bottom:34px">
+      <p class="eyebrow">01_ The cost</p>
+      <h2>You don't want more features. You want your hands to keep up.</h2>
+      <p class="lede">AEwheel adds nothing to your comp. It removes the distance between deciding and doing.</p>
+    </div>
+    <div class="stats rvs" id="statRow">
+      <div class="stat">
+        <span class="k">Sectors</span>
+        <b data-count="8">8</b>
+        <p>One throw of the cursor reaches any of them, at any angle, without looking.</p>
+      </div>
+      <div class="stat">
+        <span class="k">Actions</span>
+        <b data-count="40">40<small>+</small></b>
+        <p>The things you actually reach for, not a clone of the whole menu bar.</p>
+      </div>
+      <div class="stat">
+        <span class="k">Per action</span>
+        <b data-count="0.6" data-dec="1">0.6<small>s</small></b>
+        <p>Open, pick, release. Measured from the flick to the layer changing.</p>
+      </div>
+      <div class="stat">
+        <span class="k">Machines</span>
+        <b data-count="2">2</b>
+        <p>One key covers your desktop and your laptop. No renewal, ever.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= 02 THE MATHS ======================= -->
+<section class="band" id="maths">
+  <div class="wrap band-in">
+    <div class="sec-head rv">
+      <p class="eyebrow">02_ The maths</p>
+      <h2 class="cursor">A month of menu dives, side by side.</h2>
+      <p class="lede">Same month, same work, same editor. The only difference is how you reached the tools.</p>
+    </div>
+
+    <div class="calc rv" id="calc">
+      <div class="calc-head">
+        <div>
+          <h3>Reaching for your tools costs about nine hours a month.</h3>
+          <p>A typical editing day runs to a couple of hundred tool actions — effects applied, layers pre-composed, anchors set, nulls dropped. Down a menu each one costs around 8 seconds. On the wheel it costs about 0.6.</p>
+        </div>
+        <div class="hero-num">
+          <span class="k">You get back</span>
+          <b>9<small> hours</small></b>
+          <p class="sub">every month · around 14 working days a year</p>
+        </div>
+      </div>
+
+      <div class="bars" role="img"
+           aria-label="Hours spent reaching tools in a month: diving through menus 9.8 hours, with AEwheel 0.7 hours.">
+        <div class="bar-row">
+          <div class="bar-top">
+            <span class="bar-name"><i style="background:#bf8734"></i> Diving through menus</span>
+            <span class="bar-val">9.8<small> h</small></span>
+          </div>
+          <div class="track"><div class="fill" data-w="100" style="background:#bf8734"></div></div>
+          <p class="bar-note">Nearly a day and a half of your month, spent travelling to the tool rather than using it.</p>
+        </div>
+        <div class="bar-row">
+          <div class="bar-top">
+            <span class="bar-name"><i style="background:#28a391"></i> With AEwheel</span>
+            <span class="bar-val">0.7<small> h</small></span>
+          </div>
+          <div class="track"><div class="fill" data-w="7.1" style="background:#28a391"></div></div>
+          <p class="bar-note">The same actions, reached by flicking the cursor. Under an hour, all month.</p>
+        </div>
+      </div>
+
+      <div class="calc-foot">
+        <p class="big">That's <b>9 hours back every month</b> — and the licence costs less than one of them.</p>
+      </div>
+    </div>
+
+    <p class="foot-src">
+      Based on 20 working days at 220 tool actions a day, 8 seconds for a typical menu route (open menu, find submenu, pick item, confirm dialog) and 0.6 seconds for the same action on the wheel, both measured on our own machines. Your real figure depends on your shortcuts, your project and how deep the menu is — treat this as arithmetic on an estimate, not a promise.
+    </p>
+  </div>
+</section>
+
+<!-- ======================= 03 THE WHEEL ======================= -->
+<section class="band band-solid" id="wheel">
+  <div class="wrap band-in">
+    <div class="sec-head rv">
+      <p class="eyebrow">03_ The wheel</p>
+      <h2>Eight sectors. Everything inside reach.</h2>
+      <p class="lede">Hover a sector to arm it. Each one opens a small panel of the handful of actions that belong to it.</p>
+    </div>
+
+    <div class="rv demo-grid" id="wheelGrid">
+      <div class="panel-demo brk">
+        <div class="pd-bar">
+          <div class="dots" aria-hidden="true"><i></i><i></i><i></i></div>
+          <span class="eyebrow">AEwheel · in the comp</span>
+        </div>
+        <div class="stage">
+          <svg id="wheelSvg" viewBox="0 0 460 460" role="group"
+               aria-label="The AEwheel radial menu: eight sectors around a hub. Arm a sector to fan out its tools."></svg>
+        </div>
+        <div class="readout" id="readout" aria-live="polite"></div>
+        <p class="pd-cap">Drawn from the plugin itself. The real wheel opens under your cursor and closes the moment you release.</p>
+      </div>
+
+      <div class="tools" style="border:1px solid var(--line)">
+        <article class="tool"><span class="eyebrow">Sector 01</span><h3>Actions</h3><p>Pre-comp, un-precomp, split at the playhead, duplicate, reverse time, save the frame as a PNG, delete.</p></article>
+        <article class="tool"><span class="eyebrow">Sector 02</span><h3>Transform</h3><p>Center in the comp, fit to width or height, mirror horizontally or vertically. No numbers typed into the transform group.</p></article>
+        <article class="tool"><span class="eyebrow">Sector 03</span><h3>Create</h3><p>Shape, ellipse, polygon, star, solid, null, camera, light, text, adjustment layer &mdash; each one made to match the selection&rsquo;s in and out points.</p></article>
+        <article class="tool"><span class="eyebrow">Sector 04</span><h3>Blur</h3><p>Gaussian and Camera Lens on the wheel from the start, with box, directional, radial, fast box, channel and compound a click away in the picker.</p></article>
+        <article class="tool"><span class="eyebrow">Sector 05</span><h3>Effects</h3><p>Tint, Fill and Drop Shadow to begin with. The picker reads every effect installed in your copy of After Effects, so any of them can take a slot.</p></article>
+        <article class="tool"><span class="eyebrow">Sector 06</span><h3>Presets</h3><p>Empty until you fill it. AEwheel finds your built-in and user <code>.ffx</code> presets, or you browse to one, and it sits on the wheel.</p></article>
+        <article class="tool"><span class="eyebrow">Sector 07</span><h3>Anchor</h3><p>No tool list &mdash; a nine-point grid. Release on a cell and the anchor snaps there. No Pan-Behind, no nudge-and-undo.</p></article>
+        <article class="tool"><span class="eyebrow">Sector 08</span><h3>Freeze</h3><p>Freeze the frame under the playhead, toggle time remapping, hold the last frame to the end of the comp.</p></article>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= 05 INSTALL ======================= -->
+<section class="band band-solid" id="install">
+  <div class="wrap band-in">
+    <div class="sec-head rv">
+      <p class="eyebrow">04_ Install</p>
+      <h2>Three steps. About two minutes.</h2>
+      <p class="lede">The readme in the zip walks through the same three, with screenshots.</p>
+    </div>
+    <div class="steps rvs">
+      <div class="step">
+        <span class="n">01</span>
+        <h3>Run the installer</h3>
+        <p>Close After Effects, run <code>setup.exe</code> from the zip, then open After Effects again. Nothing else to configure.</p>
+      </div>
+      <div class="step">
+        <span class="n">02</span>
+        <h3>Pin the panel</h3>
+        <p>Open <code>Window › Extensions › AEwheel</code>, dock it wherever suits you, then save your workspace. AEwheel needs its panel open to run, and saving the workspace means it reopens with After Effects every time.</p>
+      </div>
+      <div class="step">
+        <span class="n">03</span>
+        <h3>Flick</h3>
+        <p>That's it — the wheel is live in your comp. Add your licence key in the panel whenever you're ready; until then you have 7 days of the full plugin, nothing held back.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= 06 PRICING ======================= -->
+<section class="band band-solid" id="pricing">
+  <div class="wrap band-in">
+    <div class="sec-head rv">
+      <p class="eyebrow">05_ Pricing</p>
+      <h2>Try it free. Buy it once.</h2>
+      <p class="lede">No subscription, no renewal, no seat count to manage.</p>
+    </div>
+    <div class="plans rvs">
+      <div class="plan">
+        <div class="plan-top"><h3>Free trial</h3><span class="tag" style="color:var(--dim);border-color:var(--line-2)">7 days</span></div>
+        <div class="price"><b>Free</b><span>7 days · no card needed</span></div>
+        <ul>
+          <li><b>7 days</b>, with every sector and every action unlocked</li>
+          <li>Works in your real projects, not a sandbox</li>
+          <li>No account, no sign-up — download and go</li>
+          <li>Becomes the full version the moment you add a key</li>
+        </ul>
+        <a class="btn" href="https://github.com/YOUR-USERNAME/aewheel/releases/latest/download/AEwheel-Setup.zip">Download the zip</a>
+        <p class="fine">Contains <code>setup.exe</code> and a readme with first-run steps.</p>
+      </div>
+      <div class="plan lead brk">
+        <div class="plan-top"><h3>Lifetime licence</h3><span class="tag">One payment</span></div>
+        <div class="price"><b>$15.99</b><span>once · forever</span></div>
+        <div class="devices">
+          <span class="n">2</span>
+          <span class="t"><b>Two machines, one key</b>Activate on your desktop and your laptop. Swap a machine out yourself whenever you need to.</span>
+        </div>
+        <ul>
+          <li>Everything in the trial, permanently licensed</li>
+          <li>All future updates included, <b>no expiry, no renewal</b></li>
+          <li>Key arrives by email the moment you pay</li>
+          <li>Deactivate a machine from the panel to free a slot</li>
+        </ul>
+        <a class="btn btn-fill" href="https://dodo.pe/s3yraqesmzd">Buy lifetime licence</a>
+        <div class="trust">
+          <span>One payment</span><span>No subscription</span><span>2 machines</span><span>Updates included</span>
+        </div>
+        <p class="fine">All purchases are final. Try the 7-day trial first — it's the complete plugin, so you'll know exactly what you're getting before you pay.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= 06 THE PANEL ======================= -->
+<section class="band band-solid" id="panel">
+  <div class="wrap band-in">
+    <div class="sec-head rv">
+      <p class="eyebrow">06_ The panel</p>
+      <h2 class="cursor">Your wheel. Your tools. Your order.</h2>
+      <p class="lede">The settings panel docks in After Effects like any other. Rename a sector, recolour it, drag tools into the order your hand expects.</p>
+    </div>
+
+    <div class="rv demo-grid" id="panelGrid">
+      <div class="settings brk">
+        <div class="st-bar"><b>AEWheel Settings</b><i aria-hidden="true">&#9776;</i></div>
+        <div class="st-body">
+          <div class="st-sec"><h4>Layout</h4><span class="ct">[1]</span><span class="ar" aria-hidden="true">&#183;&#183;&#183;&#183;&#8594;</span></div>
+          <div class="st-sec"><h4>Wheel</h4><span class="ct">[8]</span><span class="ar" aria-hidden="true">&#8595;</span></div>
+
+          <label class="sr-only" for="stSearch">Search tools and effects</label>
+          <input class="st-search" id="stSearch" type="search" placeholder="Search a tool, effect or preset&hellip;">
+
+          <div id="stList"></div>
+
+          <div class="st-sec" style="margin-top:6px"><h4>Preferences</h4><span class="ar" aria-hidden="true">&#8595;</span></div>
+          <div class="st-pref">
+            <span class="nm">Wheel enabled</span>
+            <span class="seg-ctl" data-pref="enabled"><button type="button" class="on">ON</button><button type="button">OFF</button></span>
+          </div>
+          <div class="st-pref">
+            <span class="nm">Wheel size</span>
+            <span class="seg-ctl" data-pref="size"><button type="button" class="on">SMALL</button><button type="button">MEDIUM</button><button type="button">LARGE</button></span>
+          </div>
+          <div class="st-pref">
+            <span class="nm">Hold delay</span>
+            <select aria-label="Hold delay">
+              <option>120 ms</option><option selected>200 ms</option><option>280 ms</option><option>400 ms</option>
+            </select>
+          </div>
+          <div class="st-pref" style="border-bottom:0">
+            <span class="nm">Animations</span>
+            <span class="seg-ctl" data-pref="anim"><button type="button" class="on">ON</button><button type="button">OFF</button></span>
+          </div>
+        </div>
+
+        <div class="st-modal" id="stModal" role="dialog" aria-modal="true" aria-label="Add a tool">
+          <div class="st-modal-in">
+            <div class="st-modal-hd">
+              <b id="stModalTitle">Add to Actions</b>
+              <button type="button" id="stModalX" aria-label="Close">&#10005;</button>
+            </div>
+            <div class="st-modal-list" id="stModalList"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="pn-notes">
+        <article class="pn-note">
+          <span class="eyebrow">Drag to reorder</span>
+          <h3>Muscle memory beats menus — so you set the order</h3>
+          <p>Sectors drag into the position you want them, and tools drag inside a sector. Put the thing you reach for twenty times a day where your hand already goes.</p>
+        </article>
+        <article class="pn-note">
+          <span class="eyebrow">Name &amp; colour</span>
+          <h3>Call a sector whatever you call it</h3>
+          <p>Every sector takes its own name and its own colour, so the wheel reads the way you think rather than the way it shipped.</p>
+        </article>
+        <article class="pn-note">
+          <span class="eyebrow">Search &amp; add</span>
+          <h3>Every effect on your machine is fair game</h3>
+          <p>The picker reads the effects installed in your copy of After Effects and your <code>.ffx</code> presets. Search, click, and it takes a slot on the wheel.</p>
+        </article>
+        <article class="pn-note">
+          <span class="eyebrow">Preferences</span>
+          <h3>Size, hold delay, animation</h3>
+          <p>Set how big the wheel opens, how long you hold before it appears, and whether it animates at all. Turn the whole thing off without uninstalling.</p>
+        </article>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= 07 FAQ ======================= -->
+<section class="band band-solid" id="faq">
+  <div class="wrap band-in">
+    <div class="sec-head rv">
+      <p class="eyebrow">07_ FAQ</p>
+      <h2>Straight answers.</h2>
+    </div>
+    <div class="faq rv">
+      <details open>
+        <summary><span class="num">01</span> Does it work on Mac?</summary>
+        <p class="ans">Not yet — AEwheel is Windows only right now. A Mac build is on the radar and it'll happen if enough of you ask for it. If you're on macOS, email us and you'll be counted.</p>
+      </details>
+      <details>
+        <summary><span class="num">02</span> How long is the free trial?</summary>
+        <p class="ans">7 days, and it's the complete plugin — every sector, every action, in your real projects. No card and no sign-up to start it. When the 7 days are up the tools lock until you add a licence key; nothing you made with it is touched, and the key turns it straight back on.</p>
+      </details>
+      <details>
+        <summary><span class="num">03</span> Which After Effects versions are supported?</summary>
+        <p class="ans">After Effects CC 2021 and newer, on Windows 10 and 11. On something older, try the free trial first — it costs nothing to find out.</p>
+      </details>
+      <details>
+        <summary><span class="num">04</span> Do I need to keep the panel open?</summary>
+        <p class="ans">Yes. AEwheel runs from its panel, so the panel has to be open — docked or floating, either is fine. Dock it once and save your workspace with <code>Window › Workspace › Save as New Workspace</code> and it reopens with After Effects every time.</p>
+      </details>
+      <details>
+        <summary><span class="num">05</span> How does the licence key work?</summary>
+        <p class="ans">Paste the key into the panel and hit activate. It checks once online, then remembers — after that AEwheel works offline. One key activates on up to 2 machines, so your desktop and laptop are both covered.</p>
+      </details>
+      <details>
+        <summary><span class="num">06</span> Is there a refund policy?</summary>
+        <p class="ans">No — all purchases are final. That's why the trial is the complete plugin with nothing held back: you get 7 days to use it on real work, and you only pay once you already know it's for you.</p>
+      </details>
+      <details>
+        <summary><span class="num">07</span> What if I get a new computer?</summary>
+        <p class="ans">Free a slot yourself and move the key across. On the old machine open the panel and hit <b>Deactivate this PC</b> — that releases one of your two activations straight away. Then install AEwheel on the new machine and enter the same key. You can do this as often as you like, so the two activations follow you from machine to machine. Only if the old PC is gone or dead and you couldn't deactivate it first, email support with your order details and we'll reset it for you.</p>
+      </details>
+      <details>
+        <summary><span class="num">08</span> Will it slow After Effects down?</summary>
+        <p class="ans">No. The wheel is a panel that sits idle until you call it, and it doesn't add effects, expressions or layers of its own to your project. Open a project built with AEwheel on a machine without it and everything still works — the plugin changes how you reach the tools, not what it writes into the comp.</p>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= PULL QUOTE ======================= -->
+<section class="quote band-solid">
+  <div class="wrap quote-in rv">
+    <p>“The tool you reach for fastest is the one you end up using.”</p>
+    <span class="src">Why the wheel exists</span>
+  </div>
+</section>
+
+<!-- ======================= CLOSING ======================= -->
+<section class="close-band band-solid">
+  <div class="cb-glow" aria-hidden="true"></div>
+  <div class="wrap cb-in rv">
+    <h2>Get your hands back.</h2>
+    <p>Download the trial, pin the panel, and see how much of your session was the route rather than the work.</p>
+    <div class="cta-row">
+      <a class="btn btn-fill" href="https://github.com/YOUR-USERNAME/aewheel/releases/latest/download/AEwheel-Setup.zip">Download free trial</a>
+      <a class="btn" href="https://dodo.pe/s3yraqesmzd">Buy lifetime licence — $15.99</a>
+    </div>
+    <div class="trust" style="justify-content:center;margin-top:26px">
+      <span>One payment</span><span>2 machines per key</span><span>No subscription</span><span>Windows</span>
+    </div>
+  </div>
+</section>
+</main>
+
+<!-- ======================= FOOTER ======================= -->
+<footer class="foot">
+  <div class="wrap">
+    <div class="foot-in">
+      <div>
+        <a class="mark" href="#top" aria-label="AEwheel">
+          <svg width="20" height="20" viewBox="0 0 22 22" aria-hidden="true">
+            <g fill="none" stroke="#8a8d94" stroke-width="1.6">
+              <path d="M1 6V1h5M16 1h5v5M21 16v5h-5M6 21H1v-5"/><path d="M7.5 7.5l7 7M14.5 7.5l-7 7"/>
+            </g>
+          </svg>
+          <span class="mark-txt" style="color:var(--dim)"><b>AE</b><span>wheel</span></span>
+        </a>
+        <p style="color:var(--faint);font-size:13.5px;max-width:34ch;margin-top:16px">
+          A radial tool wheel for After Effects. Built for Windows, sold once, no subscription.
+        </p>
+      </div>
+      <div>
+        <h4>Product</h4>
+        <ul>
+          <li><a href="#wheel">What's in the wheel</a></li>
+          <li><a href="#maths">The maths</a></li>
+          <li><a href="#install">Install</a></li>
+          <li><a href="#pricing">Pricing</a></li>
+          <li><a href="#faq">FAQ</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Support</h4>
+        <p style="margin-bottom:15px"><span class="mail">support@aewheel.shop</span></p>
+        <ul>
+          <li><a href="#faq">Licence &amp; activation help</a></li>
+          <li><a href="privacy.html">Privacy</a></li>
+          <li><a href="terms.html">Terms</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="foot-note">
+      <span>© 2026 AEwheel</span>
+      <span>Windows · After Effects CC 2021+</span>
+      <span>All purchases final</span>
+      <span>Payments by Dodo</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function(){
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* ---------- background film: fixed until the maths section has passed ---------- */
+  var vid = document.getElementById('heroVid'),
+      bgLayer = document.getElementById('bgLayer'),
+      bgDim = document.getElementById('bgDim'),
+      mathsSec = document.getElementById('maths');
+
+  if(vid && reduce){ try{ vid.pause(); }catch(e){} }
+
+  if(bgLayer && mathsSec){
+    var releaseAt = 0, bgTicking = false;
+
+    function measureRelease(){
+      var y = window.scrollY || window.pageYOffset;
+      releaseAt = Math.max(0, mathsSec.getBoundingClientRect().bottom + y - window.innerHeight);
+    }
+    function paintBg(){
+      bgTicking = false;
+      var y = window.scrollY || window.pageYOffset;
+      var past = y - releaseAt;
+      bgLayer.style.transform = past > 0 ? 'translate3d(0,' + (-past) + 'px,0)' : '';
+      if(bgDim){
+        var p = Math.min(1, y / (window.innerHeight * 0.8));
+        bgDim.style.opacity = (p * 0.74).toFixed(3);
+      }
+      if(!vid || reduce) return;
+      // stop decoding once the film has scrolled clear of the viewport
+      var gone = past > window.innerHeight;
+      if(gone && !vid.paused) vid.pause();
+      else if(!gone && vid.paused) vid.play().catch(function(){});
+    }
+    function onBgScroll(){
+      if(bgTicking) return;
+      bgTicking = true;
+      requestAnimationFrame(paintBg);
+    }
+
+    measureRelease(); paintBg();
+    window.addEventListener('scroll', onBgScroll, { passive:true });
+    window.addEventListener('resize', function(){ measureRelease(); paintBg(); });
+    window.addEventListener('load', function(){ measureRelease(); paintBg(); });
+  }
+
+  /* ---------- the wheel: same geometry and states as the plugin ---------- */
+  var SECTORS = [
+    { name:'Actions',   icon:'actions',   tools:['Pre-Comp','Un-Precomp','Split','Duplicate','Save Frame','Delete Layer'] },
+    { name:'Transform', icon:'transform', tools:['Center','Fit W','Fit H','Mirror H','Mirror V'] },
+    { name:'Create',    icon:'create',    tools:['Shape','Solid','Null','Camera','Adjust'] },
+    { name:'Blur',      icon:'blur',      tools:['Gaussian','Camera Lens'] },
+    { name:'Effects',   icon:'effects',   tools:['Tint','Fill','Shadow'] },
+    { name:'Presets',   icon:'presets',   tools:['Built-in','User presets','Browse .ffx'] },
+    { name:'Anchor',    icon:'anchor',    grid:true,
+      tools:['Top-left','Top','Top-right','Left','Centre','Right','Bottom-left','Bottom','Bottom-right'] },
+    { name:'Freeze',    icon:'freeze',    tools:['Freeze Frame','Time Remap','Freeze Last'] }
+  ];
+
+  var ICONS = {
+    actions:  'M-6.4-6.4h12.8v12.8h-12.8z M-1.8-3.3 3.4 0-1.8 3.3z',
+    transform:'M-6.8-3.4v-3.4h3.4 M3.4-6.8h3.4v3.4 M6.8 3.4v3.4h-3.4 M-3.4 6.8h-3.4v-3.4',
+    create:   'M0-6.6a6.6 6.6 0 1 0 .01 0 M0-3.4v6.8 M-3.4 0h6.8',
+    blur:     'M0-7.1c3.7 4.2 5.7 6.5 5.7 8.8A5.7 5.7 0 0 1 0 7.1 5.7 5.7 0 0 1-5.7 1.7C-5.7-.6-3.7-2.9 0-7.1z',
+    effects:  'M0-7.4 1.95-1.95 7.4 0 1.95 1.95 0 7.4-1.95 1.95-7.4 0-1.95-1.95z',
+    presets:  'M-4.7-6.8h9.4v13.6L0 2.7l-4.7 4.1z',
+    anchor:   'M0-6.8a1.95 1.95 0 1 0 .01 0 M0-2.9v9.6 M-4.3 2.1h8.6 M-6.2 2.1a6.2 6.2 0 0 0 12.4 0',
+    freeze:   'M0-7.1v14.2 M-6.2-3.6 6.2 3.6 M-6.2 3.6 6.2-3.6',
+    hub:      'M-7-2.4v-4.6h4.6 M2.4-7h4.6v4.6 M7 2.4v4.6h-4.6 M-2.4 7h-4.6v-4.6 M-3.1-3.1 3.1 3.1 M3.1-3.1-3.1 3.1'
+  };
+
+  var NS = 'http://www.w3.org/2000/svg';
+  var CX = 230, CY = 230, R_IN = 48, R_OUT = 112, RT_IN = 124, RT_OUT = 182, CR = 7, PAD = 1.6;
+
+  function el(n, a){
+    var e = document.createElementNS(NS, n);
+    for(var k in a){ if(a.hasOwnProperty(k)) e.setAttribute(k, a[k]); }
+    return e;
+  }
+  function xy(r, deg){
+    var a = (deg - 90) * Math.PI / 180;
+    return [CX + r*Math.cos(a), CY + r*Math.sin(a)];
+  }
+  function pt(r, deg){
+    var p = xy(r, deg);
+    return p[0].toFixed(2) + ',' + p[1].toFixed(2);
+  }
+  // annular sector with rounded corners — the plugin's wedge shape
+  function wedge(r0, r1, a0, a1, cr){
+    var span = a1 - a0;
+    var d0 = (cr / r0) * 180 / Math.PI;
+    var d1 = (cr / r1) * 180 / Math.PI;
+    if(span < 2*d0 + 1) d0 = Math.max(0, (span - 1) / 2);
+    if(span < 2*d1 + 1) d1 = Math.max(0, (span - 1) / 2);
+    var lg1 = (span - 2*d1) > 180 ? 1 : 0;
+    var lg0 = (span - 2*d0) > 180 ? 1 : 0;
+    return 'M' + pt(r0, a0 + d0) +
+           'Q' + pt(r0, a0) + ' ' + pt(r0 + cr, a0) +
+           'L' + pt(r1 - cr, a0) +
+           'Q' + pt(r1, a0) + ' ' + pt(r1, a0 + d1) +
+           'A' + r1 + ',' + r1 + ' 0 ' + lg1 + ' 1 ' + pt(r1, a1 - d1) +
+           'Q' + pt(r1, a1) + ' ' + pt(r1 - cr, a1) +
+           'L' + pt(r0 + cr, a1) +
+           'Q' + pt(r0, a1) + ' ' + pt(r0, a1 - d0) +
+           'A' + r0 + ',' + r0 + ' 0 ' + lg0 + ' 0 ' + pt(r0, a0 + d0) + 'Z';
+  }
+
+  var wsvg = document.getElementById('wheelSvg'),
+      readout = document.getElementById('readout');
+
+  if(wsvg){
+    var toolG = el('g', {}), ringG = el('g', {}), armed = 0, autoT = null, touched = false;
+    wsvg.appendChild(toolG);
+    wsvg.appendChild(ringG);
+
+    SECTORS.forEach(function(sec, i){
+      var a0 = i*45 - 22.5 + PAD, a1 = i*45 + 22.5 - PAD;
+      var g = el('g', { 'class':'sx', tabindex:'0', role:'button' });
+      g.setAttribute('aria-label', sec.name + ': ' + (sec.grid ? 'nine anchor positions' : sec.tools.join(', ')));
+      g.appendChild(el('path', { 'class':'pl', d: wedge(R_IN, R_OUT, a0, a1, CR) }));
+      var c = xy((R_IN + R_OUT) / 2, i*45);
+      var ig = el('g', { transform:'translate(' + c[0].toFixed(1) + ',' + (c[1] - 11).toFixed(1) + ')' });
+      ig.appendChild(el('path', { 'class':'ic', d: ICONS[sec.icon] }));
+      g.appendChild(ig);
+      var t = el('text', { 'class':'lb', x:c[0].toFixed(1), y:(c[1] + 18).toFixed(1) });
+      t.textContent = sec.name;
+      g.appendChild(t);
+      g.style.animationDelay = (i * 0.035) + 's';
+      g.addEventListener('mouseenter', function(){ stopAuto(); arm(i); });
+      g.addEventListener('focus', function(){ stopAuto(); arm(i); });
+      g.addEventListener('click', function(){ stopAuto(); arm(i); });
+      ringG.appendChild(g);
+    });
+
+    var hub = el('g', {});
+    hub.appendChild(el('circle', { 'class':'hub-c', cx:CX, cy:CY, r:38 }));
+    var hg = el('g', { transform:'translate(' + CX + ',' + (CY - 5) + ')' });
+    hg.appendChild(el('path', { 'class':'hub-x', d: ICONS.hub }));
+    hub.appendChild(hg);
+    var ht = el('text', { 'class':'hub-t', x:CX, y:CY + 23 });
+    ht.textContent = 'AEWHEEL';
+    hub.appendChild(ht);
+    wsvg.appendChild(hub);
+
+    function anchorGrid(mid){
+      var c = xy((RT_IN + RT_OUT) / 2, mid);
+      var g = el('g', { 'class':'ag' });
+      var s = 17, gap = 4, span = 3*s + 2*gap;
+      var x0 = c[0] - span/2, y0 = c[1] - span/2;
+      for(var r = 0; r < 3; r++){
+        for(var col = 0; col < 3; col++){
+          var rc = el('rect', {
+            x:(x0 + col*(s+gap)).toFixed(1), y:(y0 + r*(s+gap)).toFixed(1),
+            width:s, height:s, rx:3
+          });
+          if(r === 1 && col === 1) rc.setAttribute('class', 'hot');
+          g.appendChild(rc);
+        }
+      }
+      toolG.appendChild(g);
+    }
+
+    function arm(i){
+      armed = i;
+      var sec = SECTORS[i], mid = i * 45;
+      for(var n = 0; n < ringG.childNodes.length; n++){
+        ringG.childNodes[n].classList.toggle('on', n === i);
+      }
+      toolG.textContent = '';
+
+      if(sec.grid){ anchorGrid(mid); }
+      else {
+        var n2 = sec.tools.length;
+        var per = n2 >= 6 ? 29 : (n2 <= 2 ? 40 : 34);
+        var start = mid - (n2 * per) / 2;
+        sec.tools.forEach(function(name, k){
+          var a0 = start + k*per + 1.2, a1 = start + (k+1)*per - 1.2;
+          var g = el('g', { 'class':'tx' });
+          g.appendChild(el('path', { 'class':'pl', d: wedge(RT_IN, RT_OUT, a0, a1, CR) }));
+          var c = xy((RT_IN + RT_OUT) / 2, (a0 + a1) / 2);
+          var t = el('text', { 'class':'lb', x:c[0].toFixed(1), y:(c[1] + 4).toFixed(1) });
+          t.textContent = name;
+          g.appendChild(t);
+          if(!reduce) g.style.animationDelay = (k * 0.03) + 's';
+          toolG.appendChild(g);
+        });
+      }
+
+      if(readout){
+        readout.textContent = '';
+        var b = document.createElement('b');
+        b.textContent = sec.name;
+        readout.appendChild(b);
+        var s2 = document.createElement('span');
+        s2.textContent = sec.grid
+          ? 'A nine-point grid — release on a cell and the anchor snaps there exactly.'
+          : sec.tools.join('  ·  ');
+        readout.appendChild(s2);
+      }
+    }
+
+    wsvg.addEventListener('keydown', function(e){
+      var d = (e.key === 'ArrowRight' || e.key === 'ArrowDown') ? 1
+            : (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')   ? -1 : 0;
+      if(!d) return;
+      e.preventDefault(); stopAuto();
+      var nx = (armed + d + SECTORS.length) % SECTORS.length;
+      arm(nx); ringG.childNodes[nx].focus();
+    });
+
+    function stopAuto(){ touched = true; if(autoT){ clearInterval(autoT); autoT = null; } }
+
+    arm(0);
+
+    if(!reduce && 'IntersectionObserver' in window){
+      var wio = new IntersectionObserver(function(es){
+        es.forEach(function(e){
+          if(!e.isIntersecting) return;
+          wio.unobserve(e.target);
+          wsvg.classList.add('wheel-anim');
+          autoT = setInterval(function(){
+            if(touched) return;
+            arm((armed + 1) % SECTORS.length);
+          }, 2600);
+        });
+      }, { threshold:0.25 });
+      wio.observe(wsvg);
+    }
+  }
+
+  /* ---------- the maths: bars fill once they are on screen ---------- */
+  var bars = document.getElementById('calc');
+  if(bars){
+    var fills = bars.querySelectorAll('.fill');
+    function fillBars(){ fills.forEach(function(f){ f.style.width = f.dataset.w + '%'; }); }
+    if(reduce || !('IntersectionObserver' in window)){ fillBars(); }
+    else {
+      var bio = new IntersectionObserver(function(es){
+        es.forEach(function(e){
+          if(!e.isIntersecting) return;
+          bio.unobserve(e.target);
+          fillBars();
+        });
+      }, { threshold:0.3 });
+      bio.observe(bars);
+    }
+  }
+
+  /* ---------- the settings panel, driven by the same sector data ---------- */
+  var stList = document.getElementById('stList');
+  if(stList){
+    // what the plugin can add but the default config leaves off the wheel
+    var AVAIL = {
+      Actions:  ['Time Reverse'],
+      Transform:[],
+      Create:   ['Ellipse','Polygon','Star','Text','Light'],
+      Blur:     ['Box','Directional','Radial','Fast Box','Channel','Compound','CC Radial Fast'],
+      Effects:  ['Any installed effect, by name'],
+      Presets:  ['Browse for a .ffx file'],
+      Anchor:   [],
+      Freeze:   []
+    };
+    var DOTS = ['#46d6c0','#bf8734','#7f9cf5','#e07b6a','#9ad17a'];
+    var state = SECTORS.map(function(s){
+      return { name:s.name, locked:!!s.grid, ci:0, tools:s.tools.slice(), avail:(AVAIL[s.name]||[]).slice() };
+    });
+    var openIdx = 0;
+    var modal = document.getElementById('stModal'),
+        modalList = document.getElementById('stModalList'),
+        modalTitle = document.getElementById('stModalTitle'),
+        search = document.getElementById('stSearch');
+
+    function toolRow(sec, name, k){
+      var r = document.createElement('div');
+      r.className = 'st-tool';
+      r.style.animationDelay = (k * 0.03) + 's';
+      var gr = document.createElement('span'); gr.className = 'gr'; gr.textContent = '⠇⠇';
+      var nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = name;
+      var x = document.createElement('button');
+      x.type = 'button'; x.textContent = '✕';
+      x.setAttribute('aria-label', 'Remove ' + name);
+      x.addEventListener('click', function(e){
+        e.stopPropagation();
+        var ix = sec.tools.indexOf(name);
+        if(ix > -1){
+          sec.tools.splice(ix, 1);
+          if(sec.avail.indexOf(name) < 0) sec.avail.push(name);
+        }
+        render();
+      });
+      r.appendChild(gr); r.appendChild(nm); r.appendChild(x);
+      return r;
+    }
+
+    function sectorBody(sec, i, tools){
+      var w = document.createElement('div');
+      w.className = 'st-panel';
+      var nmWrap = document.createElement('div'); nmWrap.className = 'st-name';
+      var inp = document.createElement('input');
+      inp.type = 'text'; inp.value = sec.name;
+      inp.setAttribute('aria-label', sec.name + ' sector name');
+      inp.addEventListener('input', function(){ sec.name = inp.value; });
+      var sw = document.createElement('button');
+      sw.type = 'button'; sw.className = 'st-sw';
+      sw.style.background = DOTS[sec.ci];
+      sw.setAttribute('aria-label', 'Change ' + sec.name + ' colour');
+      sw.addEventListener('click', function(e){
+        e.stopPropagation();
+        sec.ci = (sec.ci + 1) % DOTS.length;
+        render();
+      });
+      nmWrap.appendChild(inp); nmWrap.appendChild(sw);
+      w.appendChild(nmWrap);
+
+      tools.forEach(function(t, k){ w.appendChild(toolRow(sec, t, k)); });
+
+      var add = document.createElement('button');
+      add.type = 'button'; add.className = 'st-add';
+      add.textContent = '+ Add tool';
+      add.addEventListener('click', function(e){ e.stopPropagation(); openModal(i); });
+      w.appendChild(add);
+      return w;
+    }
+
+    function render(){
+      var q = (search.value || '').trim().toLowerCase();
+      stList.textContent = '';
+      state.forEach(function(sec, i){
+        var hits = sec.tools.filter(function(t){ return t.toLowerCase().indexOf(q) > -1; });
+        var nameHit = sec.name.toLowerCase().indexOf(q) > -1;
+        if(q && !nameHit && !hits.length) return;
+
+        var row = document.createElement('div');
+        row.className = 'st-row' + (i === openIdx ? ' open' : '');
+        var gr = document.createElement('span');
+        gr.className = 'gr'; gr.textContent = '⠇⠇';
+        if(sec.locked) gr.style.opacity = '0';
+        var dot = document.createElement('span');
+        dot.className = 'dot'; dot.style.background = DOTS[sec.ci];
+        var nm = document.createElement('span');
+        nm.className = 'nm'; nm.textContent = sec.name;
+        row.appendChild(gr); row.appendChild(dot); row.appendChild(nm);
+
+        if(sec.locked){
+          var lk = document.createElement('span');
+          lk.className = 'lk'; lk.textContent = 'LOCKED';
+          row.appendChild(lk);
+        } else {
+          var ct = document.createElement('span');
+          ct.className = 'ct'; ct.textContent = sec.tools.length;
+          var ch = document.createElement('span');
+          ch.className = 'chev'; ch.textContent = '›';
+          row.appendChild(ct); row.appendChild(ch);
+          row.setAttribute('role', 'button');
+          row.setAttribute('tabindex', '0');
+          row.addEventListener('click', function(){ openIdx = (openIdx === i ? -1 : i); render(); });
+          row.addEventListener('keydown', function(e){
+            if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); openIdx = (openIdx === i ? -1 : i); render(); }
+          });
+        }
+        stList.appendChild(row);
+        if(i === openIdx && !sec.locked) stList.appendChild(sectorBody(sec, i, q ? hits : sec.tools));
+      });
+
+      if(!stList.children.length){
+        var e2 = document.createElement('p');
+        e2.className = 'st-empty';
+        e2.textContent = 'Nothing matches that yet — the picker also reads every effect installed in After Effects.';
+        stList.appendChild(e2);
+      }
+    }
+
+    function openModal(i){
+      var sec = state[i];
+      modalTitle.textContent = 'Add to ' + sec.name;
+      modalList.textContent = '';
+      if(!sec.avail.length){
+        var p = document.createElement('p');
+        p.className = 'st-empty';
+        p.textContent = 'Everything AEwheel ships for this sector is already on the wheel.';
+        modalList.appendChild(p);
+      }
+      sec.avail.forEach(function(t){
+        var b = document.createElement('button');
+        b.type = 'button'; b.className = 'st-opt';
+        b.appendChild(document.createTextNode(t));
+        var s = document.createElement('span');
+        s.textContent = 'add';
+        b.appendChild(s);
+        b.addEventListener('click', function(){
+          sec.tools.push(t);
+          sec.avail.splice(sec.avail.indexOf(t), 1);
+          closeModal(); render();
+        });
+        modalList.appendChild(b);
+      });
+      modal.classList.add('on');
+    }
+    function closeModal(){ modal.classList.remove('on'); }
+
+    document.getElementById('stModalX').addEventListener('click', closeModal);
+    modal.addEventListener('click', function(e){ if(e.target === modal) closeModal(); });
+    document.addEventListener('keydown', function(e){ if(e.key === 'Escape') closeModal(); });
+    search.addEventListener('input', render);
+
+    document.querySelectorAll('.seg-ctl').forEach(function(sc){
+      sc.addEventListener('click', function(e){
+        var b = e.target.closest('button');
+        if(!b) return;
+        sc.querySelectorAll('button').forEach(function(x){ x.classList.toggle('on', x === b); });
+      });
+    });
+
+    render();
+  }
+
+  /* ---------- scroll reveal ---------- */
+  var root = document.documentElement;
+  if(!reduce && 'IntersectionObserver' in window){
+    root.setAttribute('data-anim','on');
+    var io = new IntersectionObserver(function(es){
+      es.forEach(function(e){
+        if(e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target); }
+      });
+    }, { rootMargin:'0px 0px -11% 0px', threshold:0.06 });
+    document.querySelectorAll('.rv, .rvs').forEach(function(el){ io.observe(el); });
+  }
+
+  /* ---------- counting stats ---------- */
+  var statRow = document.getElementById('statRow');
+  if(statRow && !reduce && 'IntersectionObserver' in window){
+    var cio = new IntersectionObserver(function(es){
+      es.forEach(function(e){
+        if(!e.isIntersecting) return;
+        cio.unobserve(e.target);
+        e.target.querySelectorAll('[data-count]').forEach(function(el){
+          var to = parseFloat(el.dataset.count),
+              dec = parseInt(el.dataset.dec || '0', 10),
+              suffix = el.querySelector('small'),
+              tail = suffix ? suffix.outerHTML : '',
+              t0 = null, DUR = 1100;
+          function frame(ts){
+            if(!t0) t0 = ts;
+            var p = Math.min(1,(ts-t0)/DUR);
+            var e2 = 1 - Math.pow(1-p,3);
+            el.innerHTML = (to*e2).toFixed(dec) + tail;
+            if(p < 1) requestAnimationFrame(frame);
+            else el.innerHTML = to.toFixed(dec) + tail;
+          }
+          requestAnimationFrame(frame);
+        });
+      });
+    }, { threshold:0.4 });
+    cio.observe(statRow);
+  }
+
+  /* ---------- nav ---------- */
+  var nav = document.getElementById('nav');
+  function onScroll(){ if(nav) nav.classList.toggle('stuck', window.scrollY > 14); }
+  onScroll();
+  window.addEventListener('scroll', onScroll, { passive:true });
+
+  if('IntersectionObserver' in window){
+    var links = {}, all = [];
+    document.querySelectorAll('.nav-links a[data-sec], .rail a[data-sec]').forEach(function(a){
+      (links[a.dataset.sec] = links[a.dataset.sec] || []).push(a);
+      all.push(a);
+    });
+    var nio = new IntersectionObserver(function(es){
+      es.forEach(function(e){
+        var group = links[e.target.id];
+        if(!group || !e.isIntersecting) return;
+        all.forEach(function(a){ a.classList.remove('on'); });
+        group.forEach(function(a){ a.classList.add('on'); });
+      });
+    }, { rootMargin:'-45% 0px -50% 0px' });
+    ['cost','maths','wheel','install','pricing','panel','faq'].forEach(function(id){
+      var el = document.getElementById(id);
+      if(el) nio.observe(el);
+    });
+  }
+})();
+</script>
